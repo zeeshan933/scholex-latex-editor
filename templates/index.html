@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scholex — LaTeX Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/icon.png') }}">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Lora:ital,wght@0,600;1,400&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Design Tokens ──────────────────────────────────────── */
+    :root {
+      --ink:        #1a1a2e;
+      --ink-soft:   #3d3d5c;
+      --ink-muted:  #7b7b9d;
+      --rule:       #e2e2ee;
+      --page:       #f7f7fc;
+      --surface:    #ffffff;
+      --accent:     #4f46e5;
+      --accent-dim: #e0dffe;
+      --accent-glow:#c7c3fc;
+      --green:      #10b981;
+      --red:        #ef4444;
+      --mono:       'JetBrains Mono', monospace;
+      --sans:       'Inter', sans-serif;
+      --serif:      'Lora', serif;
+      --panel-gap:  6px;
+      --radius:     8px;
+      --tab-h:      36px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: var(--sans); background: var(--page); color: var(--ink); overflow: hidden; }
+
+    /* ── Top Bar ──────────────────────────────────────────────── */
+    #topbar {
+      height: 52px; background: var(--ink);
+      display: flex; align-items: center; padding: 0 16px;
+      gap: 10px; border-bottom: 2px solid var(--accent); flex-shrink: 0;
+    }
+    .logo { font-family: var(--serif); font-size: 20px; color: #fff; letter-spacing: -0.5px; user-select: none; }
+    .logo span { font-style: italic; color: var(--accent-glow); }
+    .logo-sub { font-family: var(--mono); font-size: 10px; color: var(--ink-muted); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+    #topbar-spacer { flex: 1; }
+
+    /* Project name field */
+    #project-name-wrap { display: flex; align-items: center; gap: 6px; }
+    #project-name-wrap label { font-family: var(--mono); font-size: 11px; color: var(--ink-muted); white-space: nowrap; }
+    #project-name {
+      font-family: var(--mono); font-size: 12px; color: #fff;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 5px; padding: 4px 10px; width: 160px; outline: none;
+    }
+    #project-name:focus { border-color: var(--accent-glow); background: rgba(255,255,255,0.13); }
+
+    /* Projects button */
+    #projects-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      color: #ccc; border-radius: var(--radius); padding: 0 12px; height: 32px;
+      font-family: var(--sans); font-size: 12px; cursor: pointer; white-space: nowrap;
+      transition: background 0.15s;
+    }
+    #projects-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+    /* Saved badge */
+    #saved-badge {
+      font-family: var(--mono); font-size: 10px; color: var(--green);
+      background: rgba(16,185,129,0.15); border-radius: 10px;
+      padding: 3px 9px; display: none; white-space: nowrap;
+    }
+
+    #status-pill {
+      font-family: var(--mono); font-size: 11px; padding: 4px 10px;
+      border-radius: 20px; background: var(--ink-soft); color: #ccc;
+      transition: background 0.2s, color 0.2s; white-space: nowrap;
+    }
+    #status-pill.ok  { background: #064e3b; color: #6ee7b7; }
+    #status-pill.err { background: #7f1d1d; color: #fca5a5; }
+
+    #compile-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--accent); color: #fff; border: none;
+      border-radius: var(--radius); padding: 0 18px; height: 36px;
+      font-family: var(--sans); font-size: 13px; font-weight: 600;
+      cursor: pointer; letter-spacing: 0.3px;
+      transition: background 0.15s, transform 0.1s; flex-shrink: 0; white-space: nowrap;
+    }
+    #compile-btn:hover  { background: #4338ca; }
+    #compile-btn:active { transform: scale(0.97); }
+    #compile-btn:disabled { background: var(--ink-muted); cursor: not-allowed; }
+    #compile-btn .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.7s linear infinite; display: none;
+    }
+    #compile-btn.loading .spinner { display: block; }
+    #compile-btn.loading .btn-label { opacity: 0.7; }
+
+    /* ── Projects Drawer ──────────────────────────────────────── */
+    #projects-drawer {
+      position: fixed; top: 52px; right: 0; width: 300px;
+      height: calc(100vh - 52px); background: #0f0f1e;
+      border-left: 1px solid rgba(255,255,255,0.07);
+      z-index: 300; display: flex; flex-direction: column;
+      transform: translateX(100%); transition: transform 0.25s ease;
+      box-shadow: -6px 0 24px rgba(0,0,0,0.35);
+    }
+    #projects-drawer.open { transform: translateX(0); }
+    .drawer-header {
+      padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.07);
+      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    }
+    .drawer-header h3 { font-family: var(--mono); font-size: 11px; color: #888; letter-spacing: 1.5px; text-transform: uppercase; }
+    .drawer-close { background: none; border: none; color: #555; font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 4px; line-height: 1; }
+    .drawer-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+    #project-list { flex: 1; overflow-y: auto; padding: 8px; }
+    .project-item {
+      display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+      border-radius: 6px; cursor: pointer; border: 1px solid transparent;
+      margin-bottom: 4px; transition: background 0.15s, border-color 0.15s;
+    }
+    .project-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.08); }
+    .p-info { flex: 1; min-width: 0; }
+    .p-name { font-family: var(--mono); font-size: 12px; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .p-time { font-family: var(--mono); font-size: 10px; color: #444; margin-top: 2px; }
+    .p-del { background: none; border: none; color: #3a3a55; font-size: 14px; cursor: pointer; padding: 3px 6px; border-radius: 3px; line-height: 1; flex-shrink: 0; }
+    .p-del:hover { color: var(--red); background: rgba(239,68,68,0.1); }
+    .project-empty { font-family: var(--mono); font-size: 11px; color: #333; text-align: center; padding: 40px 16px; line-height: 1.8; }
+
+    /* ── Workspace Layout ─────────────────────────────────────── */
+    #workspace {
+      display: flex; height: calc(100vh - 52px);
+      gap: var(--panel-gap); padding: var(--panel-gap); background: var(--rule);
+    }
+    #left-panel { width: 48%; min-width: 320px; display: flex; flex-direction: column; gap: var(--panel-gap); flex-shrink: 0; }
+
+    /* ── Editor Card ──────────────────────────────────────────── */
+    .editor-card {
+      background: var(--surface); border-radius: var(--radius);
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+    }
+    .editor-card.tex-card { flex: 1 1 0; min-height: 0; }
+    .editor-card.bib-card { flex: 0 0 220px; }
+
+    /* ── Card Tab Bar ─────────────────────────────────────────── */
+    .card-tabs {
+      display: flex; align-items: stretch; height: var(--tab-h);
+      border-bottom: 1px solid var(--rule); background: var(--page);
+      padding: 0 4px; gap: 2px; flex-shrink: 0;
+    }
+    .tab-btn {
+      display: flex; align-items: center; gap: 6px; padding: 0 12px;
+      border: none; background: transparent; font-family: var(--mono);
+      font-size: 11px; color: var(--ink-muted); cursor: pointer;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn:hover { color: var(--ink-soft); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.5; }
+    .tab-btn.active .tab-dot { opacity: 1; }
+    .card-actions { margin-left: auto; display: flex; align-items: center; padding-right: 6px; gap: 3px; }
+
+    /* ── Small icon buttons in tab bar ───────────────────────── */
+    .icon-btn {
+      border: none; background: none; cursor: pointer; color: var(--ink-muted);
+      padding: 4px 7px; border-radius: 4px; font-size: 11px;
+      font-family: var(--mono); display: flex; align-items: center; gap: 4px;
+      transition: color 0.15s, background 0.15s; white-space: nowrap;
+    }
+    .icon-btn:hover { color: var(--ink); background: var(--rule); }
+    .icon-btn.fs-btn { color: var(--accent); }
+    .icon-btn.fs-btn:hover { background: var(--accent-dim); }
+
+    /* ── Code editor area ─────────────────────────────────────── */
+    .code-editor { flex: 1; min-height: 0; display: flex; overflow: hidden; position: relative; }
+    .line-nums {
+      width: 44px; background: var(--page); border-right: 1px solid var(--rule);
+      padding: 14px 0; overflow: hidden; user-select: none; flex-shrink: 0;
+    }
+    .line-num {
+      font-family: var(--mono); font-size: 12px; line-height: 21px;
+      color: var(--ink-muted); text-align: right; padding-right: 10px; opacity: 0.5;
+    }
+    .code-textarea {
+      flex: 1; resize: none; border: none; outline: none; background: var(--surface);
+      font-family: var(--mono); font-size: 13px; line-height: 21px;
+      color: var(--ink); padding: 14px 16px; tab-size: 2; overflow-y: auto;
+    }
+    .code-textarea::placeholder { color: var(--ink-muted); opacity: 0.6; }
+
+    /* ── Fullscreen button floating inside editor (bottom-right) ─ */
+    .fs-float-btn {
+      position: absolute; bottom: 10px; right: 12px;
+      display: flex; align-items: center; gap: 5px;
+      font-family: var(--mono); font-size: 11px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 5px; padding: 5px 10px;
+      cursor: pointer; opacity: 0; transition: opacity 0.2s;
+      box-shadow: 0 2px 8px rgba(79,70,229,0.4); z-index: 10;
+    }
+    .code-editor:hover .fs-float-btn { opacity: 1; }
+    .fs-float-btn:hover { background: #4338ca; }
+
+    /* ── Assets Card ──────────────────────────────────────────── */
+    .assets-card {
+      background: var(--surface); border-radius: var(--radius);
+      flex-shrink: 0; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+    }
+    .assets-header {
+      height: var(--tab-h); display: flex; align-items: center; padding: 0 14px;
+      border-bottom: 1px solid var(--rule); background: var(--page);
+      gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--ink-muted);
+    }
+    #drop-zone {
+      margin: 10px 12px; border: 1.5px dashed var(--rule); border-radius: 6px;
+      padding: 10px; text-align: center; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    #drop-zone:hover, #drop-zone.drag-over { border-color: var(--accent-glow); background: var(--accent-dim); }
+    #drop-zone p { font-size: 12px; color: var(--ink-muted); pointer-events: none; }
+    #drop-zone p strong { color: var(--accent); }
+    #file-input { display: none; }
+    #file-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; max-height: 58px; overflow-y: auto; }
+    .file-chip {
+      display: flex; align-items: center; gap: 5px; font-family: var(--mono);
+      font-size: 11px; color: var(--ink-soft); background: var(--page);
+      border: 1px solid var(--rule); border-radius: 4px; padding: 3px 8px 3px 6px;
+    }
+    .file-chip.saved { border-color: var(--accent-glow); }
+    .chip-saved-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+      flex-shrink: 0; box-shadow: 0 0 0 2px rgba(16,185,129,0.15);
+    }
+    .chip-remove { cursor: pointer; color: var(--ink-muted); font-size: 13px; line-height: 1; }
+    .chip-remove:hover { color: var(--red); }
+
+    /* ── Right Panel ──────────────────────────────────────────── */
+    #right-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--panel-gap); }
+    .preview-card {
+      background: var(--surface); border-radius: var(--radius); flex: 1; min-height: 0;
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+    }
+    .preview-toolbar {
+      height: var(--tab-h); display: flex; align-items: center; padding: 0 14px;
+      border-bottom: 1px solid var(--rule); background: var(--page);
+      gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--ink-muted); flex-shrink: 0;
+    }
+    .preview-toolbar a {
+      margin-left: auto; color: var(--accent); text-decoration: none;
+      font-size: 11px; display: flex; align-items: center; gap: 4px;
+    }
+    .preview-toolbar a:hover { text-decoration: underline; }
+    #pdf-frame { flex: 1; width: 100%; border: none; background: #525659; display: none; }
+    #pdf-placeholder {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 14px; color: var(--ink-muted); background: #f0f0f5;
+    }
+    #pdf-placeholder svg { opacity: 0.2; }
+    #pdf-placeholder p { font-family: var(--mono); font-size: 12px; text-align: center; line-height: 1.7; }
+
+    /* ── Log Panel ────────────────────────────────────────────── */
+    #log-card {
+      background: var(--ink); border-radius: var(--radius); flex: 0 0 0; min-height: 0;
+      display: flex; flex-direction: column; overflow: hidden;
+      transition: flex-basis 0.25s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
+    #log-card.open { flex: 0 0 200px; }
+    .log-header {
+      height: var(--tab-h); display: flex; align-items: center; padding: 0 14px;
+      gap: 8px; font-family: var(--mono); font-size: 11px; color: #888;
+      cursor: pointer; user-select: none; flex-shrink: 0; border-top: 1px solid #2a2a3e;
+    }
+    .log-header:hover { color: #bbb; }
+    #log-error-count { background: var(--red); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 10px; margin-left: 4px; }
+    #log-chevron { margin-left: auto; transition: transform 0.2s; }
+    #log-card.open #log-chevron { transform: rotate(180deg); }
+    #log-output {
+      flex: 1; overflow-y: auto; padding: 12px 16px;
+      font-family: var(--mono); font-size: 11.5px; line-height: 1.8;
+      color: #a5b4fc; white-space: pre-wrap; word-break: break-all;
+    }
+
+    /* ── Resizer ──────────────────────────────────────────────── */
+    #resizer {
+      width: var(--panel-gap); background: var(--rule); cursor: col-resize;
+      flex-shrink: 0; border-radius: 3px; transition: background 0.15s;
+    }
+    #resizer:hover, #resizer.dragging { background: var(--accent-glow); }
+
+    /* ── Fullscreen Modal ─────────────────────────────────────── */
+    #fullscreen-modal {
+      position: fixed; inset: 0; z-index: 500;
+      background: #0d0d1a; display: none; flex-direction: column;
+    }
+    #fullscreen-modal.open { display: flex; }
+
+    #fs-topbar {
+      height: 46px; background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      display: flex; align-items: center; padding: 0 18px; gap: 12px; flex-shrink: 0;
+    }
+    #fs-label {
+      font-family: var(--mono); font-size: 12px; color: #888;
+      display: flex; align-items: center; gap: 8px;
+    }
+    #fs-label .fs-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+    #fs-filename { color: #ccc; }
+
+    #fs-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    #fs-compile-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 5px; padding: 0 14px; height: 30px;
+      font-family: var(--sans); font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: background 0.15s;
+    }
+    #fs-compile-btn:hover { background: #4338ca; }
+    #fs-close {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      color: #aaa; border-radius: 5px; padding: 0 12px; height: 30px;
+      font-family: var(--mono); font-size: 11px; cursor: pointer;
+      transition: background 0.15s, color 0.15s; display: flex; align-items: center; gap: 6px;
+    }
+    #fs-close:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+    #fs-editor-wrap { flex: 1; display: flex; min-height: 0; }
+    #fs-line-nums {
+      width: 54px; background: rgba(255,255,255,0.02);
+      border-right: 1px solid rgba(255,255,255,0.06);
+      padding: 16px 0; overflow: hidden; user-select: none; flex-shrink: 0;
+    }
+    #fs-line-nums .line-num { color: #2a2a4a; opacity: 1; font-size: 12px; }
+    #fs-textarea {
+      flex: 1; resize: none; border: none; outline: none; background: transparent;
+      font-family: var(--mono); font-size: 14px; line-height: 22px;
+      color: #e2e8f0; padding: 16px 22px; tab-size: 2; overflow-y: auto;
+    }
+
+    #fs-statusbar {
+      height: 26px; background: rgba(255,255,255,0.02);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; padding: 0 18px; gap: 24px;
+      font-family: var(--mono); font-size: 10px; color: #3a3a5c; flex-shrink: 0;
+    }
+    #fs-statusbar .fs-stat { color: #555; }
+    #fs-hint { margin-left: auto; color: #2a2a4a; }
+
+    /* ── Toast notification ───────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 22px; left: 50%;
+      transform: translateX(-50%) translateY(16px);
+      background: #1a1a2e; color: #e2e8f0;
+      font-family: var(--mono); font-size: 12px;
+      padding: 9px 18px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+      opacity: 0; transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none; z-index: 999; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.tok  { border-color: var(--green); color: #6ee7b7; }
+    #toast.terr { border-color: var(--red);   color: #fca5a5; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--ink-muted); }
+  </style>
+</head>
+<body>
+
+<!-- ── Top Bar ──────────────────────────────────────────────── -->
+<div id="topbar">
+  <div>
+    <div class="logo">Scho<span>lex</span></div>
+    <div class="logo-sub">LaTeX Research Editor</div>
+  </div>
+
+  <div id="project-name-wrap">
+    <label>Project:</label>
+    <input id="project-name" type="text" value="my_paper" placeholder="project name" spellcheck="false" />
+  </div>
+
+  <button id="projects-btn" onclick="toggleDrawer()">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    </svg>
+    Saved Projects
+  </button>
+
+  <div id="topbar-spacer"></div>
+  <span id="saved-badge">💾 Saved</span>
+  <div id="status-pill">Ready</div>
+
+  <button id="compile-btn" onclick="compile()">
+    <div class="spinner"></div>
+    <span class="btn-label">▶ Compile &amp; Save</span>
+  </button>
+</div>
+
+<!-- ── Projects Drawer ──────────────────────────────────────── -->
+<div id="projects-drawer">
+  <div class="drawer-header">
+    <h3>📁 Saved Projects</h3>
+    <button class="drawer-close" onclick="toggleDrawer()">✕</button>
+  </div>
+  <div id="project-list">
+    <div class="project-empty">No saved projects yet.<br>Compile to create one.</div>
+  </div>
+</div>
+
+<!-- ── Workspace ────────────────────────────────────────────── -->
+<div id="workspace">
+
+  <!-- ── Left Panel ─────────────────────────────────────────── -->
+  <div id="left-panel">
+
+    <!-- .tex Editor Card -->
+    <div class="editor-card tex-card">
+      <div class="card-tabs">
+        <button class="tab-btn active">
+          <span class="tab-dot"></span>document.tex
+        </button>
+        <div class="card-actions">
+          <button class="icon-btn" onclick="clearEditor('tex')" title="Clear">✕ Clear</button>
+          <button class="icon-btn" onclick="loadSample()" title="Load sample">⚡ Sample</button>
+        </div>
+      </div>
+      <div class="code-editor" id="tex-code-area">
+        <div class="line-nums" id="tex-line-nums"></div>
+        <textarea class="code-textarea" id="tex-editor"
+          placeholder="% Paste or type your LaTeX document here..."
+          spellcheck="false"
+          oninput="syncLineNums(this,'tex-line-nums')"
+          onscroll="syncScroll(this,'tex-line-nums')"
+          onkeydown="handleTab(event)"></textarea>
+        <!-- Fullscreen button — floats at bottom-right of the editor -->
+        <button class="fs-float-btn" onclick="openFullscreen('tex')" title="Full-screen editor">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+            <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+          </svg>
+          Full Screen
+        </button>
+      </div>
+    </div>
+
+    <!-- .bib Editor Card -->
+    <div class="editor-card bib-card">
+      <div class="card-tabs">
+        <button class="tab-btn active">
+          <span class="tab-dot"></span>references.bib
+        </button>
+        <div class="card-actions">
+          <button class="icon-btn" onclick="clearEditor('bib')" title="Clear">✕ Clear</button>
+        </div>
+      </div>
+      <div class="code-editor" id="bib-code-area">
+        <div class="line-nums" id="bib-line-nums"></div>
+        <textarea class="code-textarea" id="bib-editor"
+          placeholder="% Paste BibTeX entries here (Google Scholar → Cite → BibTeX)..."
+          spellcheck="false"
+          oninput="syncLineNums(this,'bib-line-nums')"
+          onscroll="syncScroll(this,'bib-line-nums')"
+          onkeydown="handleTab(event)"></textarea>
+        <!-- Fullscreen button -->
+        <button class="fs-float-btn" onclick="openFullscreen('bib')" title="Full-screen BibTeX editor">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+            <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+          </svg>
+          Full Screen
+        </button>
+      </div>
+    </div>
+
+    <!-- Assets Uploader -->
+    <div class="assets-card">
+      <div class="assets-header">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+          <path d="m21 15-5-5L5 21"/>
+        </svg>
+        Image Assets
+      </div>
+      <div id="drop-zone"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="dragOver(event)" ondragleave="dragLeave()" ondrop="dropFiles(event)">
+        <p>Drop images here or <strong>click to browse</strong><br>PNG · JPG · PDF · EPS</p>
+      </div>
+      <input type="file" id="file-input" multiple
+             accept=".png,.jpg,.jpeg,.gif,.pdf,.eps,.svg"
+             onchange="addFiles(this.files)" />
+      <div id="file-list"></div>
+    </div>
+
+  </div><!-- /left-panel -->
+
+  <div id="resizer"></div>
+
+  <!-- ── Right Panel ────────────────────────────────────────── -->
+  <div id="right-panel">
+
+    <div class="preview-card">
+      <div class="preview-toolbar">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        PDF Preview
+        <a id="download-link" href="#" download="document.pdf" style="display:none">↓ Download PDF</a>
+      </div>
+      <iframe id="pdf-frame"></iframe>
+      <div id="pdf-placeholder">
+        <svg width="60" height="70" viewBox="0 0 60 70" fill="none">
+          <rect x="6" y="4" width="40" height="52" rx="3" fill="#4f46e5"/>
+          <rect x="10" y="12" width="28" height="3" rx="1.5" fill="white" opacity=".4"/>
+          <rect x="10" y="20" width="22" height="3" rx="1.5" fill="white" opacity=".3"/>
+          <rect x="10" y="28" width="26" height="3" rx="1.5" fill="white" opacity=".3"/>
+          <rect x="10" y="36" width="18" height="3" rx="1.5" fill="white" opacity=".2"/>
+          <rect x="14" y="54" width="36" height="12" rx="6" fill="#10b981"/>
+          <text x="32" y="64" font-family="monospace" font-size="9" fill="white" text-anchor="middle">▶ Compile</text>
+        </svg>
+        <p>Your compiled PDF will appear here.<br>Press <strong>Compile &amp; Save</strong> or hit <kbd>Ctrl+Enter</kbd>.</p>
+      </div>
+    </div>
+
+    <div id="log-card">
+      <div class="log-header" onclick="toggleLog()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+        </svg>
+        Compilation Log
+        <span id="log-error-count" style="display:none"></span>
+        <span id="log-chevron">▾</span>
+      </div>
+      <div id="log-output"></div>
+    </div>
+
+  </div><!-- /right-panel -->
+
+</div><!-- /workspace -->
+
+<!-- ── Fullscreen Modal ──────────────────────────────────────── -->
+<div id="fullscreen-modal">
+  <div id="fs-topbar">
+    <div id="fs-label">
+      <span class="fs-dot"></span>
+      <span id="fs-filename">document.tex</span>
+    </div>
+    <div id="fs-actions">
+      <button id="fs-compile-btn" onclick="fsCompile()">▶ Compile &amp; Save</button>
+      <button id="fs-close" onclick="closeFullscreen()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="9 3 3 3 3 9"/><polyline points="15 21 21 21 21 15"/>
+          <line x1="3" y1="3" x2="10" y2="10"/><line x1="21" y1="21" x2="14" y2="14"/>
+        </svg>
+        Exit &nbsp;<kbd style="font-size:9px;opacity:0.4">Esc</kbd>
+      </button>
+    </div>
+  </div>
+  <div id="fs-editor-wrap">
+    <div id="fs-line-nums" class="line-nums"></div>
+    <textarea id="fs-textarea" spellcheck="false"
+      oninput="onFsInput()"
+      onscroll="syncScroll(this,'fs-line-nums')"
+      onkeydown="handleTab(event)"></textarea>
+  </div>
+  <div id="fs-statusbar">
+    <span class="fs-stat" id="fs-stat-lines">Lines: 1</span>
+    <span class="fs-stat" id="fs-stat-chars">Chars: 0</span>
+    <span id="fs-hint">Ctrl+Enter to compile · Esc to exit full screen</span>
+  </div>
+</div>
+
+<!-- ── Toast ─────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+/* ────────────────────────────────────────────────────────────
+   State
+──────────────────────────────────────────────────────────── */
+const uploadedFiles = new Map();   // filename → File
+const savedAssetNames = new Set(); // filenames that are already persisted on the server
+let   fsMode        = null;        // 'tex' | 'bib'
+
+/* ────────────────────────────────────────────────────────────
+   Line numbers
+──────────────────────────────────────────────────────────── */
+function syncLineNums(ta, numsId) {
+  const nums  = document.getElementById(numsId);
+  const count = ta.value.split('\n').length;
+  nums.innerHTML = Array.from({length: count}, (_, i) =>
+    `<div class="line-num">${i + 1}</div>`).join('');
+}
+function syncScroll(ta, numsId) {
+  document.getElementById(numsId).scrollTop = ta.scrollTop;
+}
+function handleTab(e) {
+  if (e.key !== 'Tab') return;
+  e.preventDefault();
+  const ta = e.target, s = ta.selectionStart;
+  ta.value = ta.value.substring(0, s) + '  ' + ta.value.substring(ta.selectionEnd);
+  ta.selectionStart = ta.selectionEnd = s + 2;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Fullscreen editor
+──────────────────────────────────────────────────────────── */
+function openFullscreen(which) {
+  fsMode = which;
+  const srcId = which === 'tex' ? 'tex-editor' : 'bib-editor';
+  const label = which === 'tex' ? 'document.tex' : 'references.bib';
+  const fsTa  = document.getElementById('fs-textarea');
+
+  document.getElementById('fs-filename').textContent = label;
+  fsTa.value = document.getElementById(srcId).value;
+  syncLineNums(fsTa, 'fs-line-nums');
+  updateFsStats(fsTa);
+
+  document.getElementById('fullscreen-modal').classList.add('open');
+  fsTa.focus();
+}
+
+function closeFullscreen() {
+  syncFsBack();
+  document.getElementById('fullscreen-modal').classList.remove('open');
+  fsMode = null;
+}
+
+function syncFsBack() {
+  if (!fsMode) return;
+  const srcId   = fsMode === 'tex' ? 'tex-editor'    : 'bib-editor';
+  const numsId  = fsMode === 'tex' ? 'tex-line-nums'  : 'bib-line-nums';
+  const src     = document.getElementById(srcId);
+  src.value     = document.getElementById('fs-textarea').value;
+  syncLineNums(src, numsId);
+}
+
+function onFsInput() {
+  const fsTa = document.getElementById('fs-textarea');
+  syncLineNums(fsTa, 'fs-line-nums');
+  updateFsStats(fsTa);
+  syncFsBack();   // live-sync so compile always sees latest content
+}
+
+function updateFsStats(ta) {
+  const lines = ta.value.split('\n').length;
+  document.getElementById('fs-stat-lines').textContent = `Lines: ${lines}`;
+  document.getElementById('fs-stat-chars').textContent = `Chars: ${ta.value.length}`;
+}
+
+function fsCompile() {
+  syncFsBack();
+  closeFullscreen();
+  compile();
+}
+
+/* ────────────────────────────────────────────────────────────
+   Keyboard shortcuts (global)
+──────────────────────────────────────────────────────────── */
+document.addEventListener('keydown', e => {
+  const modal = document.getElementById('fullscreen-modal');
+  if (e.key === 'Escape' && modal.classList.contains('open')) {
+    closeFullscreen();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    if (modal.classList.contains('open')) { syncFsBack(); closeFullscreen(); }
+    compile();
+  }
+});
+
+/* ────────────────────────────────────────────────────────────
+   Projects drawer
+──────────────────────────────────────────────────────────── */
+function toggleDrawer() {
+  const d = document.getElementById('projects-drawer');
+  d.classList.toggle('open');
+  if (d.classList.contains('open')) refreshProjectList();
+}
+
+async function refreshProjectList() {
+  const list = document.getElementById('project-list');
+  list.innerHTML = '<div class="project-empty">Loading…</div>';
+  try {
+    const projects = await fetch('/projects').then(r => r.json());
+    if (!projects.length) {
+      list.innerHTML = '<div class="project-empty">No saved projects yet.<br>Compile to create one.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    [...projects].reverse().forEach(p => {
+      const timeStr = p.saved_at ? new Date(p.saved_at).toLocaleString() : '—';
+      const el = document.createElement('div');
+      el.className = 'project-item';
+      el.innerHTML = `
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <div class="p-info">
+          <div class="p-name">${p.name}</div>
+          <div class="p-time">${timeStr}</div>
+        </div>
+        <button class="p-del" title="Delete" onclick="deleteProject(event,'${p.name}')">🗑</button>`;
+      el.addEventListener('click', () => loadProject(p.name));
+      list.appendChild(el);
+    });
+  } catch {
+    list.innerHTML = '<div class="project-empty">Could not load projects.</div>';
+  }
+}
+
+async function loadProject(name) {
+  try {
+    const data = await fetch(`/projects/${encodeURIComponent(name)}`).then(r => r.json());
+    if (!data.success) { toast('Failed to load project', 'err'); return; }
+    document.getElementById('project-name').value = name;
+    const texEd = document.getElementById('tex-editor');
+    const bibEd = document.getElementById('bib-editor');
+    texEd.value = data.tex || '';
+    bibEd.value = data.bib || '';
+    syncLineNums(texEd, 'tex-line-nums');
+    syncLineNums(bibEd, 'bib-line-nums');
+    toggleDrawer();
+
+    // Restore previously-saved image assets into the Assets panel so they
+    // travel with the project (and get sent back along on the next compile).
+    uploadedFiles.clear();
+    savedAssetNames.clear();
+    renderFileList();
+    if (data.images && data.images.length) {
+      toast(`Loaded: ${name} — fetching ${data.images.length} asset${data.images.length > 1 ? 's' : ''}…`, 'ok');
+      await restoreProjectAssets(name, data.images);
+    } else {
+      toast(`Loaded: ${name}`, 'ok');
+    }
+  } catch {
+    toast('Error loading project', 'err');
+  }
+}
+
+async function restoreProjectAssets(projectName, filenames) {
+  const results = await Promise.allSettled(filenames.map(async (filename) => {
+    const url  = `/projects/${encodeURIComponent(projectName)}/assets/${encodeURIComponent(filename)}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(filename);
+    const blob = await resp.blob();
+    return new File([blob], filename, { type: blob.type });
+  }));
+
+  let failed = 0;
+  for (const r of results) {
+    if (r.status === 'fulfilled') {
+      uploadedFiles.set(r.value.name, r.value);
+      savedAssetNames.add(r.value.name);
+    } else {
+      failed++;
+    }
+  }
+  renderFileList();
+  if (failed) toast(`${failed} asset${failed > 1 ? 's' : ''} failed to load`, 'err');
+}
+
+async function deleteProject(e, name) {
+  e.stopPropagation();
+  if (!confirm(`Delete project "${name}"? This cannot be undone.`)) return;
+  await fetch(`/projects/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  refreshProjectList();
+  toast(`Deleted: ${name}`, 'ok');
+}
+
+/* ────────────────────────────────────────────────────────────
+   File uploads
+──────────────────────────────────────────────────────────── */
+function addFiles(fileList) {
+  for (const f of fileList) {
+    uploadedFiles.set(f.name, f);
+    savedAssetNames.delete(f.name); // a fresh upload supersedes any prior saved copy of the same name
+  }
+  renderFileList();
+}
+function renderFileList() {
+  const el = document.getElementById('file-list');
+  el.innerHTML = '';
+  for (const [name] of uploadedFiles) {
+    const isSaved = savedAssetNames.has(name);
+    const chip = document.createElement('div');
+    chip.className = 'file-chip' + (isSaved ? ' saved' : '');
+    chip.title = isSaved ? `${name} — already saved with this project` : name;
+    chip.innerHTML = `${isSaved ? '<span class="chip-saved-dot"></span>' : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+      <path d="m21 15-5-5L5 21"/></svg>`}
+      ${name}<span class="chip-remove" onclick="removeFile('${name}')">×</span>`;
+    el.appendChild(chip);
+  }
+}
+function removeFile(name) { uploadedFiles.delete(name); savedAssetNames.delete(name); renderFileList(); }
+function dragOver(e)  { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+function dragLeave()  { document.getElementById('drop-zone').classList.remove('drag-over'); }
+function dropFiles(e) { e.preventDefault(); dragLeave(); addFiles(e.dataTransfer.files); }
+
+/* ────────────────────────────────────────────────────────────
+   Editor helpers
+──────────────────────────────────────────────────────────── */
+function clearEditor(which) {
+  const id     = which === 'tex' ? 'tex-editor'   : 'bib-editor';
+  const numsId = which === 'tex' ? 'tex-line-nums' : 'bib-line-nums';
+  const el     = document.getElementById(id);
+  el.value = '';
+  syncLineNums(el, numsId);
+}
+function loadSample() {
+  document.getElementById('tex-editor').value = SAMPLE_TEX;
+  document.getElementById('bib-editor').value = SAMPLE_BIB;
+  syncLineNums(document.getElementById('tex-editor'), 'tex-line-nums');
+  syncLineNums(document.getElementById('bib-editor'), 'bib-line-nums');
+}
+
+/* ────────────────────────────────────────────────────────────
+   Compile
+──────────────────────────────────────────────────────────── */
+async function compile() {
+  const btn      = document.getElementById('compile-btn');
+  const texVal   = document.getElementById('tex-editor').value;
+  const projName = document.getElementById('project-name').value.trim() || 'untitled';
+
+  if (!texVal.trim()) {
+    setStatus('err', 'No content');
+    toast('No LaTeX content to compile', 'err');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.querySelector('.btn-label').textContent = 'Compiling…';
+  setStatus('', 'Compiling…');
+  document.getElementById('saved-badge').style.display = 'none';
+
+  const fd = new FormData();
+  fd.append('tex_content',  texVal);
+  fd.append('bib_content',  document.getElementById('bib-editor').value);
+  fd.append('project_name', projName);
+  for (const [, file] of uploadedFiles) fd.append('images', file);
+
+  try {
+    const resp = await fetch('/compile', { method: 'POST', body: fd });
+
+    if (resp.ok && resp.headers.get('content-type')?.includes('pdf')) {
+      const url = URL.createObjectURL(await resp.blob());
+      showPDF(url);
+      setStatus('ok', 'Success');
+      hideLog();
+      flashSaved();
+      toast(`✓ Compiled & saved: ${projName}`, 'ok');
+    } else {
+      const data = await resp.json();
+      showLog(data.log || 'Unknown error');
+      setStatus('err', 'Error');
+      hidePDF();
+      if (data.saved_at) { flashSaved(); toast(`Saved (compile error): ${projName}`, 'ok'); }
+    }
+  } catch (err) {
+    showLog(`Network error: ${err.message}`);
+    setStatus('err', 'Failed');
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.querySelector('.btn-label').textContent = '▶ Compile & Save';
+  }
+}
+
+function flashSaved() {
+  const b = document.getElementById('saved-badge');
+  b.style.display = 'inline';
+  setTimeout(() => { b.style.display = 'none'; }, 4000);
+}
+
+function showPDF(url) {
+  const frame = document.getElementById('pdf-frame');
+  const ph    = document.getElementById('pdf-placeholder');
+  const dl    = document.getElementById('download-link');
+  frame.src           = url;
+  frame.style.display = 'block';
+  ph.style.display    = 'none';
+  dl.href             = url;
+  dl.style.display    = 'flex';
+}
+function hidePDF() {
+  document.getElementById('pdf-frame').style.display = 'none';
+  document.getElementById('pdf-placeholder').style.display = 'flex';
+}
+function setStatus(type, msg) {
+  const p = document.getElementById('status-pill');
+  p.textContent = msg;
+  p.className   = type || '';
+}
+
+/* ────────────────────────────────────────────────────────────
+   Log panel
+──────────────────────────────────────────────────────────── */
+function showLog(text) {
+  const card = document.getElementById('log-card');
+  const out  = document.getElementById('log-output');
+  const cnt  = document.getElementById('log-error-count');
+  out.textContent = text;
+  card.classList.add('open');
+  const errs = (text.match(/! LaTeX Error|Error:|error:/gi) || []).length;
+  if (errs) { cnt.textContent = `${errs} error${errs > 1 ? 's' : ''}`; cnt.style.display = 'inline'; }
+  else        cnt.style.display = 'none';
+  out.scrollTop = 0;
+}
+function hideLog()   { document.getElementById('log-card').classList.remove('open'); document.getElementById('log-error-count').style.display = 'none'; }
+function toggleLog() { document.getElementById('log-card').classList.toggle('open'); }
+
+/* ────────────────────────────────────────────────────────────
+   Toast
+──────────────────────────────────────────────────────────── */
+let _toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className   = `show${type ? ' t' + type : ''}`;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+}
+
+/* ────────────────────────────────────────────────────────────
+   Resizer
+──────────────────────────────────────────────────────────── */
+(function () {
+  const resizer = document.getElementById('resizer');
+  const left    = document.getElementById('left-panel');
+  let drag = false, sx, sw;
+  resizer.addEventListener('mousedown', e => {
+    drag = true; sx = e.clientX; sw = left.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cssText = 'user-select:none;cursor:col-resize';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!drag) return;
+    left.style.width = Math.max(280, Math.min(sw + e.clientX - sx, window.innerWidth - 400)) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    drag = false; resizer.classList.remove('dragging');
+    document.body.style.cssText = '';
+  });
+})();
+
+/* ────────────────────────────────────────────────────────────
+   Init
+──────────────────────────────────────────────────────────── */
+['tex-editor', 'bib-editor'].forEach(id => {
+  syncLineNums(document.getElementById(id), id === 'tex-editor' ? 'tex-line-nums' : 'bib-line-nums');
+});
+
+/* ────────────────────────────────────────────────────────────
+   Sample content
+──────────────────────────────────────────────────────────── */
+const SAMPLE_TEX = `\\documentclass[12pt,a4paper]{article}
+\\usepackage[utf8]{inputenc}
+\\usepackage{graphicx}
+\\usepackage{cite}
+\\usepackage{hyperref}
+
+\\title{Test Document with Image and References}
+\\author{Test Author}
+\\date{\\today}
+
+\\begin{document}
+\\maketitle
+
+\\begin{abstract}
+A simple test document to verify image rendering and bibliography
+compilation in Scholex.
+\\end{abstract}
+
+\\section{Introduction}
+Deep learning has shown remarkable results in image classification \\cite{lecun1998}
+and attention-based architectures \\cite{vaswani2017}.
+
+\\section{Method}
+Figure~\\ref{fig:test} shows a sample uploaded image.
+
+\\begin{figure}[h]
+  \\centering
+  \\includegraphics[width=0.6\\linewidth]{test_image}
+  \\caption{A test image uploaded via the Assets panel.}
+  \\label{fig:test}
+\\end{figure}
+
+\\section{Conclusion}
+If citations show as [1][2] and the image appears, everything works.
+
+\\bibliographystyle{plain}
+\\bibliography{references}
+
+\\end{document}`;
+
+const SAMPLE_BIB = `@article{lecun1998,
+  author  = {LeCun, Yann and Bottou, L{\\'e}on and Bengio, Yoshua and Haffner, Patrick},
+  title   = {Gradient-based learning applied to document recognition},
+  journal = {Proceedings of the IEEE},
+  year    = {1998},
+  volume  = {86},
+  number  = {11},
+  pages   = {2278--2324}
+}
+
+@article{vaswani2017,
+  author  = {Vaswani, Ashish and Shazeer, Noam and Parmar, Niki and others},
+  title   = {Attention is all you need},
+  journal = {Advances in Neural Information Processing Systems},
+  year    = {2017},
+  volume  = {30},
+  pages   = {5998--6008}
+}`;
+</script>
+</body>
+</html>

@@ -1,27 +1,113 @@
-# Scholex — Web-Based LaTeX Editor
+# Scholex — Lightweight LaTeX Research Editor
 
-Scholex is a lightweight, web-based LaTeX and BibTeX editor built with Python (Flask) and vanilla web technologies. It provides a real-time, split-pane workspace for drafting research papers, managing bibliographies, and uploading image assets—all compiled locally on your server.
+A self-hosted, split-screen LaTeX editor for research papers, built with
+Python/Flask and plain HTML/CSS/JS. Compiles `.tex` + `.bib` + images to PDF
+via the native `pdflatex` / `bibtex` toolchain.
 
-## ✨ Features
+---
 
-* **Dual Editor Workspace:** Side-by-side editing for `document.tex` and `references.bib`.
-* **Live PDF Preview:** Instantly view compiled outputs via an embedded PDF viewer.
-* **Local Project Persistence:** Auto-saves projects, assets, and source files directly to the server's disk (`/saved_projects`).
-* **Asset Management:** Drag-and-drop file uploading for images (`.png`, `.jpg`, `.pdf`, `.eps`) with automatic filename sanitization.
-* **Detailed Compilation Logs:** Real-time stdout capture for `pdflatex` and `bibtex` to easily debug syntax errors.
-* **Immersive Fullscreen Mode:** Distraction-free editing environment for heavy writing sessions.
+## Project Structure
 
-## 🛠️ Tech Stack
+```
+latex-editor/
+├── app.py               # Flask backend
+├── requirements.txt     # Python dependencies
+├── README.md
+└── templates/
+    └── index.html       # Single-page frontend
+```
 
-* **Backend:** Python 3, Flask, Werkzeug
-* **Frontend:** HTML5, CSS3 (Custom Design Tokens), Vanilla JavaScript
-* **System Dependencies:** `texlive-full` (for `pdflatex` and `bibtex` execution)
+---
 
-## 🚀 Installation & Setup
+## Prerequisites
 
-### 1. System Prerequisites
-Scholex requires a working installation of LaTeX on the host machine. If you are using an Ubuntu/Debian environment, you can install the full TeX Live distribution:
+### 1. Python 3.9+
+```bash
+python3 --version
+```
+
+### 2. TeX Live (provides pdflatex & bibtex)
+```bash
+# Debian / Ubuntu
+sudo apt-get update && sudo apt-get install -y texlive-full
+
+# macOS (via Homebrew)
+brew install --cask mactex
+
+# Windows
+# Download and install MiKTeX from https://miktex.org/
+```
+
+Verify the tools are on your PATH:
+```bash
+pdflatex --version
+bibtex --version
+```
+
+---
+
+## Setup & Run
 
 ```bash
-sudo apt-get update
-sudo apt-get install texlive-full
+# 1. Clone / copy this project
+cd latex-editor
+
+# 2. Create a virtual environment
+python3 -m venv venv
+source venv/bin/activate      # Windows: venv\Scripts\activate
+
+# 3. Install Python dependencies
+pip install -r requirements.txt
+
+# 4. Start the server
+python app.py
+```
+
+Open your browser at **http://localhost:5000**
+
+---
+
+## Usage
+
+| Action | How |
+|--------|-----|
+| Write LaTeX | Left pane → `document.tex` editor |
+| Add references | Left pane → `references.bib` editor |
+| Upload figures | Drop or browse images in the Assets section |
+| Compile | Click **▶ Compile** or press **Ctrl+Enter** |
+| View PDF | Right pane auto-updates after success |
+| Debug errors | Log panel at bottom-right expands on failure |
+| Load sample | Click ⚡ in the `.tex` editor tab |
+
+---
+
+## Compilation Pipeline
+
+Each press of Compile runs the standard four-step sequence inside an
+isolated temporary directory (cleaned up automatically):
+
+```
+pdflatex (pass 1)  →  bibtex  →  pdflatex (pass 2)  →  pdflatex (pass 3)
+```
+
+- BibTeX runs only when the `.bib` panel has content.
+- Errors surface the full log output in the collapsible log panel.
+- A 60-second timeout guards against runaway compilations.
+
+---
+
+## Configuration
+
+Edit the top of `app.py` to change:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `MAX_CONTENT_LENGTH` | 32 MB | Max upload size |
+| `timeout` in `subprocess.run` | 60 s | Compilation timeout |
+| `port` in `app.run` | 5000 | Server port |
+
+For production, run behind **Gunicorn** + **Nginx** instead of the dev server:
+```bash
+pip install gunicorn
+gunicorn -w 4 -b 0.0.0.0:8000 app:app
+```
