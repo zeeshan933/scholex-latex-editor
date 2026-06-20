@@ -4,6 +4,8 @@ A self-hosted, split-screen LaTeX editor for research papers, built with
 Python/Flask and plain HTML/CSS/JS. Compiles `.tex` + `.bib` + images to PDF
 via the native `pdflatex` / `bibtex` toolchain.
 
+![1781955977204](image/README/1781955977204.png "Screenshot main page")
+
 ---
 
 ## Project Structure
@@ -22,11 +24,13 @@ latex-editor/
 ## Prerequisites
 
 ### 1. Python 3.9+
+
 ```bash
 python3 --version
 ```
 
 ### 2. TeX Live (provides pdflatex & bibtex)
+
 ```bash
 # Debian / Ubuntu
 sudo apt-get update && sudo apt-get install -y texlive-full
@@ -39,6 +43,7 @@ brew install --cask mactex
 ```
 
 Verify the tools are on your PATH:
+
 ```bash
 pdflatex --version
 bibtex --version
@@ -69,15 +74,15 @@ Open your browser at **http://localhost:5000**
 
 ## Usage
 
-| Action | How |
-|--------|-----|
-| Write LaTeX | Left pane → `document.tex` editor |
-| Add references | Left pane → `references.bib` editor |
-| Upload figures | Drop or browse images in the Assets section |
-| Compile | Click **▶ Compile** or press **Ctrl+Enter** |
-| View PDF | Right pane auto-updates after success |
-| Debug errors | Log panel at bottom-right expands on failure |
-| Load sample | Click ⚡ in the `.tex` editor tab |
+| Action         | How                                                     |
+| -------------- | ------------------------------------------------------- |
+| Write LaTeX    | Left pane →`document.tex` editor                     |
+| Add references | Left pane →`references.bib` editor                   |
+| Upload figures | Drop or browse images in the Assets section             |
+| Compile        | Click**▶ Compile** or press **Ctrl+Enter** |
+| View PDF       | Right pane auto-updates after success                   |
+| Debug errors   | Log panel at bottom-right expands on failure            |
+| Load sample    | Click ⚡ in the `.tex` editor tab                     |
 
 ---
 
@@ -100,13 +105,14 @@ pdflatex (pass 1)  →  bibtex  →  pdflatex (pass 2)  →  pdflatex (pass 3)
 
 Edit the top of `app.py` to change:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `MAX_CONTENT_LENGTH` | 32 MB | Max upload size |
-| `timeout` in `subprocess.run` | 60 s | Compilation timeout |
-| `port` in `app.run` | 5000 | Server port |
+| Setting                           | Default | Description         |
+| --------------------------------- | ------- | ------------------- |
+| `MAX_CONTENT_LENGTH`            | 32 MB   | Max upload size     |
+| `timeout` in `subprocess.run` | 60 s    | Compilation timeout |
+| `port` in `app.run`           | 5000    | Server port         |
 
 For production, run behind **Gunicorn** + **Nginx** instead of the dev server:
+
 ```bash
 pip install gunicorn
 gunicorn -w 4 -b 0.0.0.0:8000 app:app
